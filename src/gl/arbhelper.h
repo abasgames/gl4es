@@ -21,11 +21,11 @@
 // ARBCONV_DBG - general ArbConverter debug logs
 #define ARBCONV_DBG(a) 
 // ARBCONV_DBG_LP - code loop ArbConverter debug logs
-#define ARBCONV_DBG_LP(a)
+#define ARBCONV_DBG_LP(a) 
 // ARBCONV_DBG_AS - reassembly loop (2nd loop) ArbConverter debug logs
-#define ARBCONV_DBG_AS(a)
+#define ARBCONV_DBG_AS(a) 
 // ARBCONV_DBG_HEAVY - heavy ArbConverter debug logs and operations (e.g. check for pointer correctness...)
-#define ARBCONV_DBG_HEAVY(a)
+#define ARBCONV_DBG_HEAVY(a) 
 #endif
 
 #ifdef MAX_TEX
@@ -63,8 +63,7 @@ typedef enum _eVariableType {
 	VARTYPE_ALIAS,
 	VARTYPE_OUTPUT,
 	
-	VARTYPE_CONST, // Used when having a true constant
-	VARTYPE_PSEUDOCONST, // Used when having an anonymous variable
+	VARTYPE_CONST, // Used when having an anonymous variable
 	VARTYPE_TEXTURE, // Not available in vertex programs, fixed name in fragment programs
 	VARTYPE_TEXTARGET, // Not available in vertex programs, fixed name in fragment programs
 	VARTYPE_UNK

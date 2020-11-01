@@ -12,6 +12,7 @@ option(PANDORA "Set to ON if targeting an OpenPandora device" ${PANDORA})
 option(PYRA "Set to ON if targeting an Dragonbox Pyra device" ${PYRA})
 option(BCMHOST "Set to ON if targeting an RPi(2) device" ${BCMHOST})
 option(ODROID "Set to ON if targeting an ODroid device" ${ODROID})
+option(ANDROID "Set to ON if targeting an Android device" ${ANDROID})
 option(CHIP "Set to ON if targeting an C.H.I.P. device" ${CHIP})
 option(AMIGAOS4 "Set to ON if targeting an AmigaOS4/Warp3D platform (activate NOEGL and NOX11)" ${AMIGAOS4})
 option(NOX11 "Set to ON to not use X11 (creation of context has to be done outside gl4es)" ${NOX11})
@@ -22,6 +23,12 @@ option(USE_CCACHE "Set to ON to use ccache if present in the system" ${USE_CCACH
 option(USE_CLOCK "Set to ON to use clock_gettime instead of gttimeofday for LIBGL_FPS" ${USE_CLOCK})
 option(NO_LOADER "disable library loader (useful for static library with NOEGL, NOX11, use include/gl4esinit.h)" ${NO_LOADER})
 option(NO_INIT_CONSTRUCTOR "disable automatic initialization (useful for static library, use include/gl4esinit.h)" ${NO_INIT_CONSTRUCTOR})
+
+include(CheckSymbolExists)
+check_symbol_exists(backtrace "execinfo.h" HAS_BACKTRACE)
+if (HAS_BACKTRACE)
+    add_definitions(-DHAS_BACKTRACE)
+endif()
 
 # Pandora
 if(PANDORA)
@@ -70,6 +77,13 @@ if(ODROID)
     add_definitions(-DODROID)
 endif()
 
+# Android
+if(ANDROID)
+    add_definitions(-DANDROID)
+    add_definitions(-DNOX11 -DNO_GBM -DDEFAULT_ES=2)
+    find_library(log-lib log)
+endif()
+
 #PocketCHIP
 if(CHIP)
     add_definitions(-DCHIP)
@@ -93,6 +107,7 @@ endif()
 
 #NOX11
 if(NOX11)
+    add_definitions(-DEGL_NO_X11)
     add_definitions(-DNOX11)
 endif()
 

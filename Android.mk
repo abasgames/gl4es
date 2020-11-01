@@ -62,6 +62,7 @@ LOCAL_SRC_FILES := \
 	src/gl/queries.c \
 	src/gl/raster.c \
 	src/gl/render.c \
+	src/gl/samplers.c \
 	src/gl/shader.c \
 	src/gl/shaderconv.c \
 	src/gl/shader_hacks.c \
@@ -94,7 +95,7 @@ LOCAL_CFLAGS += -DNO_GBM
 #LOCAL_CFLAGS += -DNO_INIT_CONSTRUCTOR
 LOCAL_CFLAGS += -DDEFAULT_ES=2
 
-LOCAL_LDLIBS := -ldl -llog
+LOCAL_LDLIBS := -llog
 #building as a static lib
 
 LOCAL_CFLAGS += -DSTATICLIB

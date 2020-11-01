@@ -49,6 +49,7 @@ SET(GL_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/gl/queries.c
     ${CMAKE_CURRENT_SOURCE_DIR}/gl/raster.c
     ${CMAKE_CURRENT_SOURCE_DIR}/gl/render.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/gl/samplers.c
     ${CMAKE_CURRENT_SOURCE_DIR}/gl/shader.c
     ${CMAKE_CURRENT_SOURCE_DIR}/gl/shaderconv.c
     ${CMAKE_CURRENT_SOURCE_DIR}/gl/shader_hacks.c
@@ -116,6 +117,7 @@ SET(GL_H
     ${CMAKE_CURRENT_SOURCE_DIR}/gl/queries.h
     ${CMAKE_CURRENT_SOURCE_DIR}/gl/raster.h
     ${CMAKE_CURRENT_SOURCE_DIR}/gl/render.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/gl/samplers.h
     ${CMAKE_CURRENT_SOURCE_DIR}/gl/shader.h
     ${CMAKE_CURRENT_SOURCE_DIR}/gl/shaderconv.h
     ${CMAKE_CURRENT_SOURCE_DIR}/gl/shader_hacks.h
@@ -203,6 +205,9 @@ else()
     endif()
     if(USE_CLOCK)
         target_link_libraries(GL rt)
+    endif()
+    if(ANDROID)
+        target_link_libraries(GL ${log-lib})
     endif()
     
     if(CMAKE_SHARED_LIBRARY_SUFFIX MATCHES ".so")

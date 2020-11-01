@@ -7,12 +7,18 @@
 #include "../config.h"
 
 // ARBCONV_DBG_RE - resolve* error ArbConverter debug logs
+#ifdef DEBUG
 #define ARBCONV_DBG_RE(...) printf(__VA_ARGS__);
+#else
+#define ARBCONV_DBG_RE(...)
+#endif
 
-#define IS_SWIZZLE(str) (((str)[0] >= 'w') && ((str)[0] <= 'z') && \
- (((str)[1] == '\0') || (((str)[1] >= 'w') && ((str)[1] <= 'z') && \
- (((str)[2] == '\0') || (((str)[2] >= 'w') && ((str)[2] <= 'z') && \
- (((str)[3] == '\0') || (((str)[3] >= 'w') && ((str)[3] <= 'z') && \
+#define IS_SWIZ_VALUE(v) ((((v) >= 'w') && ((v) <= 'z')) || \
+  ((v) == 'r') || ((v) == 'g') || ((v) == 'b') || ((v) == 'a'))
+#define IS_SWIZZLE(str) (IS_SWIZ_VALUE((str)[0]) && \
+ (((str)[1] == '\0') || (IS_SWIZ_VALUE((str)[1]) && \
+ (((str)[2] == '\0') || (IS_SWIZ_VALUE((str)[2]) && \
+ (((str)[3] == '\0') || (IS_SWIZ_VALUE((str)[3]) && \
   ((str)[4] == '\0'))))))))
 #define IS_NEW_STR_OR_SWIZZLE(str, t) (((str)[0] == ',') || ((t == 1) && IS_SWIZZLE(str)))
 #define IS_NONE_OR_SWIZZLE (!newVar->strLen || IS_SWIZZLE(newVar->strParts[0]))
@@ -460,7 +466,7 @@ int resolveAttrib(sCurStatus_NewVar *newVar, int vertex) {
 	
 	return 0;
 }
-int resolveOutput(sCurStatus_NewVar *newVar, int vertex, int *hasFogFragCoord) {
+int resolveOutput(sCurStatus_NewVar *newVar, int vertex, struct sSpecialCases *specialCases) {
 	char *tok = popFIFO((sArray*)newVar);
 	
 	if (!tok) {
@@ -557,7 +563,7 @@ int resolveOutput(sCurStatus_NewVar *newVar, int vertex, int *hasFogFragCoord) {
 		} else if (!strcmp(tok, "fogcoord")) {
 			// result.fogcoord => gl_FogFragCoord
 			free(tok);
-			*hasFogFragCoord = 1;
+			specialCases->hasFogFragCoord = 1;
 			pushArray((sArray*)&newVar->var->init, strdup("gl4es_FogFragCoordTemp"));
 			newVar->var->init.strings_total_len = 22;
 		} else if (!strcmp(tok, "pointsize")) {
@@ -610,7 +616,8 @@ int resolveOutput(sCurStatus_NewVar *newVar, int vertex, int *hasFogFragCoord) {
 		} else if (!strcmp(tok, "depth")) {
 			// result.depth => gl_FragDepth
 			free(tok);
-			pushArray((sArray*)&newVar->var->init, strdup("gl_FragDepth"));
+			specialCases->isDepthReplacing = 1;
+			pushArray((sArray*)&newVar->var->init, strdup("gl4es_FragDepthTemp"));
 			newVar->var->init.strings_total_len = 12;
 		} else {
 			ARBCONV_DBG_RE("Failed to get output: result.%s\n", tok)
@@ -1401,6 +1408,8 @@ char **resolveParam(sCurStatus_NewVar *newVar, int vertex, int type) {
 			return NULL;
 		}
 	} else if (tok[0] == '{') {
+		int valuesCnt = 0;
+		
 		sCurStatus pseudoSt;
 		pseudoSt.curValue.newVar.state = 0;
 		pseudoSt.status = ST_VARIABLE_INIT;
@@ -1441,6 +1450,7 @@ char **resolveParam(sCurStatus_NewVar *newVar, int vertex, int type) {
 					pseudoSt.status = ST_ERROR;
 					continue;
 				}
+				++valuesCnt;
 				pseudoSt.curValue.newVar.state = 3*(pseudoSt.curValue.newVar.state / 3) + 2;
 				break;
 				
@@ -1490,7 +1500,9 @@ char **resolveParam(sCurStatus_NewVar *newVar, int vertex, int type) {
 			return NULL;
 		}
 		
-		if (appendString(&pseudoSt, ")", 1)) {
+		if (((((valuesCnt != 1) && (valuesCnt != 4))) || appendString(&pseudoSt, ")", 1))
+		  && ( (valuesCnt != 2)                       || appendString(&pseudoSt, ", 0., 0.)", 9))
+		  && ( (valuesCnt != 3)                       || appendString(&pseudoSt, ", 0.)", 5))) {
 			free(pseudoSt.outputString);
 			ARBCONV_DBG_RE("Failed to get param: not enough memory?\n")
 			return NULL;
@@ -1606,7 +1618,7 @@ char **resolveParam(sCurStatus_NewVar *newVar, int vertex, int type) {
 	 \ ? "state" "." "matrix" "." "program" "[" <stateProgramMatNum> "]" "." "invtrans" "." "row" "[" <stateMatrixRowNum> "]"
 	 \ V "program" "." "env" "[" <progEnvParamNum> "]"
 	 \ V "program" "." "local" "[" <progLocalParamNum> "]"
-	 \ * <optionalSign> <floatConstant>
+	 \ V <optionalSign> <floatConstant>
 	 \ V "{" <optionalSign> <floatConstant> "}"
 	 \ V "{" <optionalSign> <floatConstant> "," <optionalSign> <floatConstant> "}"
 	 \ V "{" <optionalSign> <floatConstant> "," <optionalSign> <floatConstant> "," <optionalSign> <floatConstant> "}"
@@ -1866,7 +1878,7 @@ char **resolveParam(sCurStatus_NewVar *newVar, int vertex, int type) {
 	 \ V "program" "." "env" "[" <progEnvParamNum> ".." <progEnvParamNum> "]"
 	 \ V "program" "." "local" "[" <progLocalParamNum> "]"
 	 \ V "program" "." "local" "[" <progLocalParamNum> ".." <progLocalParamNum> "]"
-	 \ * <optionalSign> <floatConstant>
+	 \ V <optionalSign> <floatConstant>
 	 \ V "{" <optionalSign> <floatConstant> "}"
 	 \ V "{" <optionalSign> <floatConstant> "," <optionalSign> <floatConstant> "}"
 	 \ V "{" <optionalSign> <floatConstant> "," <optionalSign> <floatConstant> "," <optionalSign> <floatConstant> "}"
@@ -1978,7 +1990,7 @@ char **resolveParam(sCurStatus_NewVar *newVar, int vertex, int type) {
 	 \ ? "state" "." "matrix" "." "program" "[" <stateProgramMatNum> "]" "." "invtrans" "." "row" "[" <stateMatrixRowNum> "]"
 	 \ V "program" "." "env" "[" <progEnvParamNum> "]"
 	 \ V "program" "." "local" "[" <progLocalParamNum> "]"
-	 \ * <optionalSign> <floatConstant>
+	 \ V <optionalSign> <floatConstant>
 	 \ V "{" <optionalSign> <floatConstant> "}"
 	 \ V "{" <optionalSign> <floatConstant> "," <optionalSign> <floatConstant> "}"
 	 \ V "{" <optionalSign> <floatConstant> "," <optionalSign> <floatConstant> "," <optionalSign> <floatConstant> "}"
@@ -2206,7 +2218,7 @@ char **resolveParam(sCurStatus_NewVar *newVar, int vertex, int type) {
 	 \ V "program" "." "env" "[" <progEnvParamNum> ".." <progEnvParamNum> "]"
 	 \ V "program" "." "local" "[" <progLocalParamNum> "]"
 	 \ V "program" "." "local" "[" <progLocalParamNum> ".." <progLocalParamNum> "]"
-	 \ * <optionalSign> <floatConstant>
+	 \ V <optionalSign> <floatConstant>
 	 \ V "{" <optionalSign> <floatConstant> "}"
 	 \ V "{" <optionalSign> <floatConstant> "," <optionalSign> <floatConstant> "}"
 	 \ V "{" <optionalSign> <floatConstant> "," <optionalSign> <floatConstant> "," <optionalSign> <floatConstant> "}"
@@ -2283,7 +2295,7 @@ char **resolveParam(sCurStatus_NewVar *newVar, int vertex, int type) {
 
 #define FAIL(str) curStatusPtr->status = ST_ERROR; if (*error_msg) free(*error_msg); \
 		*error_msg = strdup(str); return
-void parseToken(sCurStatus* curStatusPtr, int vertex, char **error_msg, int *hasFogFragCoord) {
+void parseToken(sCurStatus* curStatusPtr, int vertex, char **error_msg, struct sSpecialCases *specialCases) {
 	if (((curStatusPtr->curToken == TOK_UNKNOWN) && (curStatusPtr->status != ST_LINE_COMMENT))
 		|| (curStatusPtr->curToken == TOK_NULL)) {
 		FAIL("Unknown token");
@@ -2387,6 +2399,20 @@ void parseToken(sCurStatus* curStatusPtr, int vertex, char **error_msg, int *has
 					free(tok);
 					FAIL("Cannot redefine variable");
 				}
+				
+				if (!strcmp(tok, "half")) {
+					// Special case for the 'half' keyword
+					pushArray((sArray*)curStatusPtr->curValue.newVar.var, strdup("gl4es_half"));
+					
+					// Hopefully this doesn't make a free-after-free in case of error (though it shouldn't)
+					int ret;
+					khint_t varIdx = kh_put(variables, curStatusPtr->varsMap, tok, &ret);
+					if (ret < 0) {
+						FAIL("Unknown error");
+					}
+					kh_val(curStatusPtr->varsMap, varIdx) = curStatusPtr->curValue.newVar.var;
+				}
+				
 				pushArray((sArray*)curStatusPtr->curValue.newVar.var, tok);
 				curStatusPtr->curValue.newVar.state = 1;
 				break; }
@@ -2458,6 +2484,20 @@ void parseToken(sCurStatus* curStatusPtr, int vertex, char **error_msg, int *has
 					free(tok);
 					FAIL("Cannot redefine variable");
 				}
+				
+				if (!strcmp(tok, "half")) {
+					// Special case for the 'half' keyword
+					pushArray((sArray*)curStatusPtr->curValue.newVar.var, strdup("gl4es_half"));
+					
+					// Hopefully this doesn't make a free-after-free in case of error (though it shouldn't)
+					int ret;
+					khint_t varIdx = kh_put(variables, curStatusPtr->varsMap, tok, &ret);
+					if (ret < 0) {
+						FAIL("Unknown error");
+					}
+					kh_val(curStatusPtr->varsMap, varIdx) = curStatusPtr->curValue.newVar.var;
+				}
+				
 				pushArray((sArray*)curStatusPtr->curValue.newVar.var, tok);
 				curStatusPtr->curValue.newVar.state = 1;
 				break; }
@@ -2533,7 +2573,6 @@ void parseToken(sCurStatus* curStatusPtr, int vertex, char **error_msg, int *has
 			
 		case VARTYPE_ALIAS:
 		case VARTYPE_CONST:
-		case VARTYPE_PSEUDOCONST:
 		case VARTYPE_TEXTURE:
 		case VARTYPE_TEXTARGET:
 		case VARTYPE_UNK:
@@ -2660,7 +2699,7 @@ void parseToken(sCurStatus* curStatusPtr, int vertex, char **error_msg, int *has
 					FAIL("Invalid state");
 				}
 				
-				if (resolveOutput(&curStatusPtr->curValue.newVar, vertex, hasFogFragCoord)) {
+				if (resolveOutput(&curStatusPtr->curValue.newVar, vertex, specialCases)) {
 					FAIL("Not a valid output");
 				}
 				
@@ -3066,7 +3105,6 @@ void parseToken(sCurStatus* curStatusPtr, int vertex, char **error_msg, int *has
 		case VARTYPE_TEMP:
 		case VARTYPE_ALIAS:
 		case VARTYPE_CONST:
-		case VARTYPE_PSEUDOCONST:
 		case VARTYPE_TEXTURE:
 		case VARTYPE_TEXTARGET:
 		case VARTYPE_UNK:
@@ -3122,8 +3160,15 @@ void parseToken(sCurStatus* curStatusPtr, int vertex, char **error_msg, int *has
 			}
 			
 			sVariable *var = kh_val(curStatusPtr->varsMap, varIdx);
-			
 			pushArray((sArray*)var, curStatusPtr->curValue.string);
+			
+			int ret;
+			varIdx = kh_put(variables, curStatusPtr->varsMap, curStatusPtr->curValue.string, &ret);
+			if (ret < 0) {
+				FAIL("Unknown error");
+			}
+			kh_val(curStatusPtr->varsMap, varIdx) = var;
+			
 			curStatusPtr->valueType = TYPE_NONE;
 			break;
 			
@@ -3237,13 +3282,13 @@ void parseToken(sCurStatus* curStatusPtr, int vertex, char **error_msg, int *has
 						FAIL("Invalid texture sampler");
 					}
 					curStatusPtr->curValue.newInst.state = STATE_AFTER_TEXSPLINT;
-				} else {
-					sVariable *cst = createVariable(VARTYPE_CONST);
-					pushArray((sArray*)&cst->init, getToken(curStatusPtr));
-					pushArray((sArray*)&curStatusPtr->variables, cst);
-					curVarPtr->var = cst;
-					curStatusPtr->curValue.newInst.state = STATE_AFTER_NUMBER;
+					break;
 				}
+				
+				/* FALLTHROUGH */
+			case STATE_AFTER_SIGN:
+				pushArray((sArray*)&curStatusPtr->_fixedNewVar, getToken(curStatusPtr));
+				curStatusPtr->curValue.newInst.state = STATE_AFTER_NUMBER;
 				break;
 				
 			case STATE_AFTER_VALID_LSQBR_START:
@@ -3285,11 +3330,9 @@ void parseToken(sCurStatus* curStatusPtr, int vertex, char **error_msg, int *has
 			
 		case TOK_FLOATCONST:
 			switch (curStatusPtr->curValue.newInst.state) {
-			case STATE_START: {
-				sVariable *cst = createVariable(VARTYPE_CONST);
-				pushArray((sArray*)&cst->init, getToken(curStatusPtr));
-				pushArray((sArray*)&curStatusPtr->variables, cst);
-				curVarPtr->var = cst;
+			case STATE_START:
+			case STATE_AFTER_SIGN: {
+				pushArray((sArray*)&curStatusPtr->_fixedNewVar, getToken(curStatusPtr));
 				curStatusPtr->curValue.newInst.state = STATE_AFTER_NUMBER;
 				break;
 			}
@@ -3569,7 +3612,8 @@ void parseToken(sCurStatus* curStatusPtr, int vertex, char **error_msg, int *has
 				return;
 				
 			case STATE_AFTER_ELEMENT:
-			case STATE_RBRACE: // Should be able to go directly to the resolveParam part...
+			case STATE_AFTER_NUMBER: // Should be able to go
+			case STATE_RBRACE:       // directly to the resolveParam part...
 				if (INSTTEX(curStatusPtr->curValue.newInst.inst.type)
 				 && (curStatusPtr->curValue.newInst.curArg == 2)) {
 					if ((curStatusPtr->_fixedNewVar.strLen != 4)
@@ -3612,13 +3656,13 @@ void parseToken(sCurStatus* curStatusPtr, int vertex, char **error_msg, int *has
 					break;
 				} else {
 					int failure;
-					curStatusPtr->_fixedNewVar.var = createVariable(VARTYPE_PSEUDOCONST);
+					curStatusPtr->_fixedNewVar.var = createVariable(VARTYPE_CONST);
 					
 					if ((vertex && !strcmp(curStatusPtr->_fixedNewVar.strParts[0], "vertex"))
 					 || (!vertex && !strcmp(curStatusPtr->_fixedNewVar.strParts[0], "fragment"))) {
 						failure = resolveAttrib(&curStatusPtr->_fixedNewVar, vertex);
 					} else if (!strcmp(curStatusPtr->_fixedNewVar.strParts[0], "result")) {
-						failure = resolveOutput(&curStatusPtr->_fixedNewVar, vertex, hasFogFragCoord);
+						failure = resolveOutput(&curStatusPtr->_fixedNewVar, vertex, specialCases);
 					} else {
 						char **resolved = resolveParam(&curStatusPtr->_fixedNewVar, vertex, 1);
 						
@@ -3690,7 +3734,6 @@ void parseToken(sCurStatus* curStatusPtr, int vertex, char **error_msg, int *has
 				/* FALLTHROUGH */
 			case STATE_AFTER_VALID:
 			case STATE_AFTER_VALID_RSQBR:
-			case STATE_AFTER_NUMBER:
 			case STATE_AFTER_SWIZZLE:
 				if (curStatusPtr->curToken == TOK_COMMA) {
 					curStatusPtr->curValue.newInst.state = STATE_START;
